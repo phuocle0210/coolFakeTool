@@ -1,4 +1,4 @@
-import { AnyNode } from "cheerio";
+ import { AnyNode } from "cheerio";
 import HTML from "./utils/html";
 import Http from "./utils/http";
 import db from "./utils/db";
@@ -32,11 +32,20 @@ interface IProduct {
     colors: (TResult | undefined)[]
 }
 
+interface IColor {
+    name: string,
+    image: string
+}
+
 class CoolFake {
     private urlOrigin: string;
+    public sizes: string[];
+    public colors: IColor[];
 
     constructor() {
         this.urlOrigin = "https://www.coolmate.me";
+        this.sizes = [];
+        this.colors = [];
     }
 
     public async getCategories() {
@@ -59,11 +68,12 @@ class CoolFake {
                     const a = $(el).children("a");
                     const href = `${this.urlOrigin}${a.attr("href") as string}`.replace("?itm_source=navbar", "");
                     const url = href.replace("https://", "").split("/")[2];
-    
+                    const name = a.text().trim() as string;
+
                     // console.log(a.text().trim())
-                    if(url !== undefined) {
+                    if(url !== undefined && !name.toLowerCase().includes("tất cả")) {
                         c.push({
-                            name: a.text().trim() as string,
+                            name,
                             url,
                             title
                         });
@@ -114,14 +124,13 @@ class CoolFake {
                         const response = await Http.get(`https://www.coolmate.me/product/body-html/${productId}`);
                         description = response.html;
                     }
-                    
+
                     if(!products.has(productName)) {
                         const productImageList = html.find(element, ".option-color__item", ($, element) => {
                             const images = $(element).attr("data-images") as string;
                             const title = $(element).attr("data-title") as string;
 
-                            if(title === undefined)
-                                return undefined;
+                            if(title === undefined) return undefined;
 
                             const avatar = $(element).find(".checkmark").attr("style") as string;
                             const avatarMatch = avatar.match(/background-image: url((.*?));/);
@@ -146,10 +155,20 @@ class CoolFake {
                             };
 
                             sizes.forEach(size => {
-                                if(size.option1 === title) {
+                                !this.sizes.includes(size.option2) && size.option2 !== ""
+                                && this.sizes.push(size.option2);
+
+                                if(size.option1 === title && size.option2 !== "") {
                                     result[title].sizes.push(size.option2);
                                 }
-                            });                            
+                            });
+                            
+                            if(this.colors.findIndex(color => color.name === title) === -1) {
+                                this.colors.push({
+                                    name: title,
+                                    image: result[title].avatar
+                                })
+                            }
 
                             return result
                         }).filter(Boolean);
@@ -177,10 +196,13 @@ class CoolFake {
             }
             const product = products.get("T-Shirt Care & Share Bản lĩnh") as IProduct;
             console.log(product.colors);
+            // console.log(products)
             // if(index === 2)
             //     break;
-            break;
+                // break;
         }
+        // console.log(products);
+        return products;
     }
 
     public static async start() {
@@ -192,42 +214,56 @@ class CoolFake {
             name: string
         }
 
-        for(const category of categories) {
-            const result = await db<ICategoryInsert>("categories").where("name", "=", category.title).first();
-            if(result !== null) {
-                console.log(category.title, "đã tồn tại!");
-                continue;
-            }
+        const products = await coolFake.getProducts(categories);
 
-            let d = await db<ICategoryInsert>("categories").insert({
-                name: category.title
-            });
-
-            if(d.status === false) {
-                console.log(`Thêm thất bại! bỏ qua...`);
-                continue;
-            }
-
-            for(const sub of category.subCategories) {
-                const r = await db<ICategoryInsert>("sub_categories").where("name", "=", sub.name).first();
-
-                if(r !== null) {
-                    await db("categories_subcategories").insert({
-                        category_id: d.data?.insertId,
-                        sub_category_id: r.id
-                    });
-
-                    continue;
-                }
-
-                const insertSub = await db<ICategoryInsert>("sub_categories").insert({ name: sub.name });
-                
-                await db("categories_subcategories").insert({
-                    category_id: d.data?.insertId,
-                    sub_category_id: insertSub.data?.insertId
-                });
-            }
+        interface ISize {
+            name: string
         }
+
+        for(const size of coolFake.sizes)
+            await db<ISize>("sizes").insert({ name: size });
+
+        for(const color of coolFake.colors)
+            await db<IColor>("colors").insert({ name: color.name, image: color.image });    
+    
+        console.log(coolFake.sizes);
+
+        // for(const category of categories) {
+        //     const result = await db<ICategoryInsert>("categories").where("name", "=", category.title).first();
+        //     if(result !== null) {
+        //         console.log(category.title, "đã tồn tại!");
+        //         continue;
+        //     }
+
+        //     let d = await db<ICategoryInsert>("categories").insert({
+        //         name: category.title
+        //     });
+
+        //     if(d.status === false) {
+        //         console.log(`Thêm thất bại! bỏ qua...`);
+        //         continue;
+        //     }
+
+        //     for(const sub of category.subCategories) {
+        //         const r = await db<ICategoryInsert>("sub_categories").where("name", "=", sub.name).first();
+
+        //         if(r !== null) {
+        //             await db("categories_subcategories").insert({
+        //                 category_id: d.data?.insertId,
+        //                 sub_category_id: r.id
+        //             });
+
+        //             continue;
+        //         }
+
+        //         const insertSub = await db<ICategoryInsert>("sub_categories").insert({ name: sub.name });
+                
+        //         await db("categories_subcategories").insert({
+        //             category_id: d.data?.insertId,
+        //             sub_category_id: insertSub.data?.insertId
+        //         });
+        //     }
+        // }
         // console.log(categoriesInsert);
     }
 }

@@ -2,15 +2,19 @@
   "name": "coolfake",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.ts",
+  "files": ["/dist"],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@types/md5": "^2.3.5",
     "axios": "^1.6.2",
     "cheerio": "^1.0.0-rc.12",
+    "md5": "^2.3.0",
     "mysql2": "^3.6.5"
   }
 }

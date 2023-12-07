@@ -2,6 +2,8 @@
 import HTML from "./utils/html";
 import Http from "./utils/http";
 import db from "./utils/db";
+import md5 from "md5";
+import str from "./utils/str";
 
 interface ISubCategory {
     name: string,
@@ -32,10 +34,45 @@ interface IProduct {
     colors: (TResult | undefined)[]
 }
 
+interface IProductDetail {
+    product_id: string,
+    size_id: string,
+    color_id: string,
+    sku: string,
+    price: number,
+    stock: number
+}
+
+interface IProductDetailImage {
+    product_detail_id: string,
+    image: string
+}
+
 interface IColor {
+    id?: string,
     name: string,
     image: string
 }
+
+interface ICategoryInsert {
+    id?: string,
+    name: string,
+    slug: string
+}
+interface ISize {
+    id?: string,
+    name: string
+}
+
+type IProductDatabase = {
+    name: string,
+    sub_description?: string,
+    description?: string,
+    slug: string
+}
+
+type TCategoryProduct = { product_id: string, sub_category_id: string };
+
 
 class CoolFake {
     private urlOrigin: string;
@@ -55,11 +92,13 @@ class CoolFake {
             throw Error("Lỗi, không cào được trang chính!");
 
         const html = new HTML(response);
-        const categoryList = html.each<ICategory>(".nav__sub-item", ($, element) => {
+        const categoryList = html.each<ICategory | undefined>(".nav__sub-item", ($, element) => {
 
             //ul[rel-script="mega-menu-active"] li
             const title = $(element).children("a").text().trim();
             const c: ISubCategory[] = [];
+            if(title.toLowerCase().includes("sale") || title.toLowerCase().includes("Care&Share"))
+                return undefined;
 
             $(element).find(title.toLowerCase() === "sản phẩm" ? "div.grid__column" : `div.mega-menu__item`).each((_, el) => {
                 const title = $(el).find("h3.mega-menu__title").text();
@@ -71,23 +110,15 @@ class CoolFake {
                     const name = a.text().trim() as string;
 
                     // console.log(a.text().trim())
-                    if(url !== undefined && !name.toLowerCase().includes("tất cả")) {
-                        c.push({
-                            name,
-                            url,
-                            title
-                        });
-                    }
+                    if(url !== undefined && !name.toLowerCase().includes("tất cả"))
+                        c.push({ name, url, title });
                 })
             });
 
-            return {
-                title,
-                subCategories: c
-            };
-        });
+            return { title, subCategories: c };
+        }).filter(Boolean) ;
 
-        return categoryList;
+        return categoryList as ICategory[];
     }
 
     public async getProducts(categoriesList: ICategory[]) {
@@ -121,7 +152,7 @@ class CoolFake {
                     let description = "";
 
                     if(productId) {
-                        const response = await Http.get(`https://www.coolmate.me/product/body-html/${productId}`);
+                        const response = await this.getDescription(productId) as { html: string };
                         description = response.html;
                     }
 
@@ -155,10 +186,14 @@ class CoolFake {
                             };
 
                             sizes.forEach(size => {
-                                !this.sizes.includes(size.option2) && size.option2 !== ""
-                                && this.sizes.push(size.option2);
+                                const check = !this.sizes.includes(size.option2) && size.option2 !== "";
+                                check && this.sizes.push(size.option2);
 
-                                if(size.option1 === title && size.option2 !== "") {
+                                if(
+                                    size.option1 === title && 
+                                    size.option2 !== "" &&
+                                    !result[title].sizes.find(s => s === size.option2)
+                                ) {
                                     result[title].sizes.push(size.option2);
                                 }
                             });
@@ -194,8 +229,8 @@ class CoolFake {
 
                 });
             }
-            const product = products.get("T-Shirt Care & Share Bản lĩnh") as IProduct;
-            console.log(product.colors);
+            // const product = products.get("T-Shirt Care & Share Bản lĩnh") as IProduct;
+            // console.log(product.colors);
             // console.log(products)
             // if(index === 2)
             //     break;
@@ -205,20 +240,22 @@ class CoolFake {
         return products;
     }
 
+    public async getDescription(productId: string, index: number = 0): Promise<{html: string} | Function> {
+        try {
+            return Http.get(`https://www.coolmate.me/product/body-html/${productId}`);
+        } catch {
+            if(index <= 5) return this.getDescription(productId, ++index);
+            throw Error("Khong load duoc description");
+        }
+    }
+
     public static async start() {
         const coolFake = new CoolFake();
         const categories = await coolFake.getCategories();
 
-        interface ICategoryInsert {
-            id?: string,
-            name: string
-        }
-
         const products = await coolFake.getProducts(categories);
 
-        interface ISize {
-            name: string
-        }
+        
 
         for(const size of coolFake.sizes)
             await db<ISize>("sizes").insert({ name: size });
@@ -226,46 +263,139 @@ class CoolFake {
         for(const color of coolFake.colors)
             await db<IColor>("colors").insert({ name: color.name, image: color.image });    
     
-        console.log(coolFake.sizes);
+        for(const category of categories) {
+            const result = await db<ICategoryInsert>("categories").where("name", "=", category.title).first();
+            if(result !== null) {
+                console.log(category.title, "đã tồn tại!");
+                continue;
+            }
 
-        // for(const category of categories) {
-        //     const result = await db<ICategoryInsert>("categories").where("name", "=", category.title).first();
-        //     if(result !== null) {
-        //         console.log(category.title, "đã tồn tại!");
-        //         continue;
-        //     }
+            let d = await db<Omit<ICategoryInsert, "slug">>("categories").insert({
+                name: category.title
+            });
 
-        //     let d = await db<ICategoryInsert>("categories").insert({
-        //         name: category.title
-        //     });
+            if(d.status === false) {
+                console.log(`Thêm thất bại! bỏ qua...`);
+                continue;
+            }
 
-        //     if(d.status === false) {
-        //         console.log(`Thêm thất bại! bỏ qua...`);
-        //         continue;
-        //     }
+            for(const sub of category.subCategories) {
+                const r = await db<ICategoryInsert>("sub_categories").where("name", "=", sub.name).first();
 
-        //     for(const sub of category.subCategories) {
-        //         const r = await db<ICategoryInsert>("sub_categories").where("name", "=", sub.name).first();
+                if(r !== null) {
+                    await db("categories_subcategories").insert({
+                        category_id: d.data?.insertId,
+                        sub_category_id: r.id
+                    });
 
-        //         if(r !== null) {
-        //             await db("categories_subcategories").insert({
-        //                 category_id: d.data?.insertId,
-        //                 sub_category_id: r.id
-        //             });
+                    continue;
+                }
 
-        //             continue;
-        //         }
-
-        //         const insertSub = await db<ICategoryInsert>("sub_categories").insert({ name: sub.name });
+                const insertSub = await db<ICategoryInsert>("sub_categories")
+                .insert({ 
+                    name: sub.name,
+                    slug: str.slug(sub.name)
+                });
                 
-        //         await db("categories_subcategories").insert({
-        //             category_id: d.data?.insertId,
-        //             sub_category_id: insertSub.data?.insertId
-        //         });
-        //     }
-        // }
-        // console.log(categoriesInsert);
+                await db("categories_subcategories").insert({
+                    category_id: d.data?.insertId,
+                    sub_category_id: insertSub.data?.insertId
+                });
+            }
+        }
+
+        for(let [productName, product] of products) {
+            if(product.colors.length === 0) continue;
+
+            const productFind = await db<IProductDatabase>("products")
+            .where("name", "=", productName).first();
+
+            if(productFind !== null) {
+                console.log(productFind.name, "da ton tai")
+                continue;
+            }
+
+            const productInsert = await db<IProductDatabase>("products").insert({
+                name: productName,
+                slug: str.slug(productName),
+                description: product.description
+            });
+            
+            for(const category of product.categories) {
+                const c: any = await db("sub_categories")
+                .where("name", "=", category)
+                .first();
+
+                if(c === null) continue;
+
+                await db<TCategoryProduct>("categories_products")
+                .insert({
+                    product_id: productInsert.data?.insertId.toString() as string,
+                    sub_category_id: c?.id as string
+                });
+            }
+
+            for(const color of product.colors) {
+                console.log(color)
+                if(!color) continue;
+                const keys = Object.keys(color);
+
+                for(const colorKey of keys) {
+                    const colorDB = await colorFind(colorKey);
+                    if(!colorDB) continue;
+
+                    const colorData = color[colorKey];
+                    console.log(colorData.sizes)
+                    for(const size of colorData.sizes) {
+                        const findSize = await sizeFind(size);
+                        if(!findSize) continue;
+
+                        console.log(product.priceAfter)
+                        // console.log(findSize.id, colorDB.id, productInsert.data?.insertId);
+                        // console.log(productName, findSize.name, colorDB.name)
+                        const price = product.priceAfter.replace(".", "").replace("đ", "");
+
+                        const productDetail = await db<IProductDetail>("product_details").insert({
+                            product_id: productInsert.data?.insertId.toString() as string, 
+                            color_id: colorDB.id as string,
+                            size_id: findSize.id as string,
+                            price: parseInt(price),
+                            sku: md5(colorDB.id as string + findSize.id + productInsert.data?.insertId),
+                            stock: 50
+                        });
+
+                        for(const image of colorData.images) {
+                            await db<IProductDetailImage>("product_detail_images")
+                            .insert({
+                                product_detail_id: productDetail?.data?.insertId.toString() as string,
+                                image: image.replace("/image/", "https://media2.coolmate.me/cdn-cgi/image/quality=80,format=auto/uploads/")
+                            });
+                        }
+                    }
+                    
+
+                }
+            }
+
+        }
+
+        console.log("Thực hiện xong...");
     }
+}
+
+async function colorFind(name: string) {
+    return db<IColor>("colors").where("name", "=", name).first();
+}
+async function sizeFind(name: string) {
+    return db<ISize>("sizes").where("name", "=", name).first();
+}
+
+async function categoryFind(name: string) {
+    
+}
+
+async function insertProductDetail(productId: string) {
+
 }
 
 CoolFake.start();

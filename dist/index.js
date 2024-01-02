@@ -140,7 +140,7 @@ class CoolFake {
                 }
                 // const product = products.get("T-Shirt Care & Share Bản lĩnh") as IProduct;
                 // console.log(product.colors);
-                // console.log(products)
+                //  (products)
                 // if(index === 2)
                 //     break;
                 // break;
@@ -152,10 +152,16 @@ class CoolFake {
     getDescription(productId, index = 0) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                return http_1.default.get(`https://www.coolmate.me/product/body-html/${productId}`);
+                const r = http_1.default.get(`https://www.coolmate.me/product/body-html/${productId}`)
+                    .catch(() => null);
+                if (r === null) {
+                    console.log(`Khong load duoc`);
+                    throw Error("Load không được...");
+                }
+                return r;
             }
             catch (_a) {
-                if (index <= 5)
+                if (index <= 10)
                     return this.getDescription(productId, ++index);
                 throw Error("Khong load duoc description");
             }
@@ -168,9 +174,18 @@ class CoolFake {
             const categories = yield coolFake.getCategories();
             const products = yield coolFake.getProducts(categories);
             for (const size of coolFake.sizes)
-                yield (0, db_1.default)("sizes").insert({ name: size });
+                yield (0, db_1.default)("sizes").insert({
+                    name: size,
+                    created_at: new Date(),
+                    updated_at: new Date()
+                });
             for (const color of coolFake.colors)
-                yield (0, db_1.default)("colors").insert({ name: color.name, image: color.image });
+                yield (0, db_1.default)("colors").insert({
+                    name: color.name,
+                    image: color.image,
+                    created_at: new Date(),
+                    updated_at: new Date()
+                });
             for (const category of categories) {
                 const result = yield (0, db_1.default)("categories").where("name", "=", category.title).first();
                 if (result !== null) {
@@ -178,7 +193,9 @@ class CoolFake {
                     continue;
                 }
                 let d = yield (0, db_1.default)("categories").insert({
-                    name: category.title
+                    name: category.title,
+                    created_at: new Date(),
+                    updated_at: new Date()
                 });
                 if (d.status === false) {
                     console.log(`Thêm thất bại! bỏ qua...`);
@@ -205,8 +222,18 @@ class CoolFake {
                 }
             }
             for (let [productName, product] of products) {
-                if (product.colors.length === 0)
+                if (product.colors === undefined || product.colors.length === 0 || product.categories.length === 0)
                     continue;
+                if (product.colors === undefined)
+                    continue;
+                if (product.colors.some(i => i[Object.keys(i)[0]].sizes.length === 0)) {
+                    console.log(`${productName} size rong, bo qua...`);
+                    continue;
+                }
+                const productTest = "Tất cổ dài 84RISING Basketball";
+                if (productName.includes(productTest)) {
+                    console.log(product, product.colors.map(i => console.log(i)));
+                }
                 const productFind = yield (0, db_1.default)("products")
                     .where("name", "=", productName).first();
                 if (productFind !== null) {
@@ -216,14 +243,18 @@ class CoolFake {
                 const productInsert = yield (0, db_1.default)("products").insert({
                     name: productName,
                     slug: str_1.default.slug(productName),
-                    description: product.description
+                    description: product.description,
+                    created_at: new Date(),
+                    updated_at: new Date()
                 });
                 for (const category of product.categories) {
                     const c = yield (0, db_1.default)("sub_categories")
                         .where("name", "=", category)
                         .first();
-                    if (c === null)
+                    if (c === null) {
+                        console.log(`${category} khong ton tai trong ${productName}, bo qua...`);
                         continue;
+                    }
                     yield (0, db_1.default)("categories_products")
                         .insert({
                         product_id: (_d = productInsert.data) === null || _d === void 0 ? void 0 : _d.insertId.toString(),
@@ -231,37 +262,50 @@ class CoolFake {
                     });
                 }
                 for (const color of product.colors) {
-                    console.log(color);
-                    if (!color)
+                    // console.log(color)
+                    if (!color) {
+                        console.log(`${productName} khong thay mau, bo qua...`);
                         continue;
+                    }
                     const keys = Object.keys(color);
                     for (const colorKey of keys) {
                         const colorDB = yield colorFind(colorKey);
-                        if (!colorDB)
+                        if (!colorDB) {
+                            console.log(`Khong tim thay mau ${colorKey} cua ${productName}, bo qua...`);
                             continue;
+                        }
                         const colorData = color[colorKey];
-                        console.log(colorData.sizes);
                         for (const size of colorData.sizes) {
                             const findSize = yield sizeFind(size);
-                            if (!findSize)
+                            if (!findSize) {
+                                console.log(`Khong tim thay size, ${productName}, bo qua...`);
                                 continue;
-                            console.log(product.priceAfter);
+                            }
                             // console.log(findSize.id, colorDB.id, productInsert.data?.insertId);
                             // console.log(productName, findSize.name, colorDB.name)
                             const price = product.priceAfter.replace(".", "").replace("đ", "");
+                            const sku = (0, md5_1.default)(colorDB.id + findSize.id + ((_e = productInsert.data) === null || _e === void 0 ? void 0 : _e.insertId) + (Math.floor(Math.random() * 10000) + 1).toString());
+                            if (productName.includes(productTest))
+                                console.log(`THÊM:: ${productName}, ${colorDB.name}, ${findSize.name}`);
                             const productDetail = yield (0, db_1.default)("product_details").insert({
-                                product_id: (_e = productInsert.data) === null || _e === void 0 ? void 0 : _e.insertId.toString(),
+                                product_id: (_f = productInsert.data) === null || _f === void 0 ? void 0 : _f.insertId.toString(),
                                 color_id: colorDB.id,
                                 size_id: findSize.id,
                                 price: parseInt(price),
-                                sku: (0, md5_1.default)(colorDB.id + findSize.id + ((_f = productInsert.data) === null || _f === void 0 ? void 0 : _f.insertId)),
-                                stock: 50
+                                sku,
+                                stock: 50,
+                                created_at: new Date(),
+                                updated_at: new Date()
                             });
+                            if (productDetail.status === false) {
+                                console.log(productDetail);
+                            }
                             for (const image of colorData.images) {
                                 yield (0, db_1.default)("product_detail_images")
                                     .insert({
                                     product_detail_id: (_g = productDetail === null || productDetail === void 0 ? void 0 : productDetail.data) === null || _g === void 0 ? void 0 : _g.insertId.toString(),
                                     image: image.replace("/image/", "https://media2.coolmate.me/cdn-cgi/image/quality=80,format=auto/uploads/")
+                                        .replace("/uploads/", "https://media2.coolmate.me/cdn-cgi/image/quality=80,format=auto/uploads/")
                                 });
                             }
                         }

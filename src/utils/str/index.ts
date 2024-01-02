@@ -14,7 +14,7 @@ export default {
         
         for (let key in listEncode) {
             const regex = new RegExp(listEncode[key as keyof typeof listEncode], 'g');
-            text = text.toLowerCase().replace(regex, key).replace(/\s|\//, "-");
+            text = text.toLowerCase().replace(regex, key).replace(/"/, "").replace(/\s|\//, "-");
         }
 
         return text;

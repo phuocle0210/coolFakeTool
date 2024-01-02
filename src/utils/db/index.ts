@@ -60,7 +60,9 @@ export default function table<T>(tableName: string) {
                 values.push(value);
             }
 
-            sql = sql.replace("__ATTRIBUTES__", attributes.join(", ")).replace("__VALUES__", Array(keys.length).fill("?").join(", "));
+            sql = sql.replace("__ATTRIBUTES__", attributes.join(", "))
+            .replace("__VALUES__", Array(keys.length).fill("?").join(", "));
+
             try {
                 // console.log(sql, values.join(", "))
                 const result = await query(sql, values) as unknown as ResultSetHeader;

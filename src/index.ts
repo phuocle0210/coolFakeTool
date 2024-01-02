@@ -31,7 +31,7 @@ interface IProduct {
     priceBefore: string,
     priceAfter: string,
     description: string,
-    colors: (TResult | undefined)[]
+    colors: TResult[] | undefined
 }
 
 interface IProductDetail {
@@ -206,7 +206,7 @@ class CoolFake {
                             }
 
                             return result
-                        }).filter(Boolean);
+                        }).filter(Boolean) as TResult[];
 
                         const productPrices = $(element).find(".product-prices");
                         const discount = productPrices.children("span").text().trim() as string;
@@ -231,7 +231,7 @@ class CoolFake {
             }
             // const product = products.get("T-Shirt Care & Share Bản lĩnh") as IProduct;
             // console.log(product.colors);
-            // console.log(products)
+            //  (products)
             // if(index === 2)
             //     break;
                 // break;
@@ -242,9 +242,18 @@ class CoolFake {
 
     public async getDescription(productId: string, index: number = 0): Promise<{html: string} | Function> {
         try {
-            return Http.get(`https://www.coolmate.me/product/body-html/${productId}`);
+            const r = Http.get(`https://www.coolmate.me/product/body-html/${productId}`)
+            .catch(() => null);
+
+            if(r === null) {
+                console.log(`Khong load duoc`)
+                throw Error("Load không được...");
+            }
+
+            return r;
         } catch {
-            if(index <= 5) return this.getDescription(productId, ++index);
+            if(index <= 10) 
+                return this.getDescription(productId, ++index);
             throw Error("Khong load duoc description");
         }
     }
@@ -252,16 +261,22 @@ class CoolFake {
     public static async start() {
         const coolFake = new CoolFake();
         const categories = await coolFake.getCategories();
-
         const products = await coolFake.getProducts(categories);
 
-        
-
         for(const size of coolFake.sizes)
-            await db<ISize>("sizes").insert({ name: size });
+            await db<ISize & { created_at: Date, updated_at: Date }>("sizes").insert({ 
+                name: size,
+                created_at: new Date(),
+                updated_at: new Date()
+            });
 
         for(const color of coolFake.colors)
-            await db<IColor>("colors").insert({ name: color.name, image: color.image });    
+            await db<IColor & { created_at: Date, updated_at: Date }>("colors").insert({ 
+                name: color.name, 
+                image: color.image,
+                created_at: new Date(),
+                updated_at: new Date()
+            });    
     
         for(const category of categories) {
             const result = await db<ICategoryInsert>("categories").where("name", "=", category.title).first();
@@ -270,8 +285,10 @@ class CoolFake {
                 continue;
             }
 
-            let d = await db<Omit<ICategoryInsert, "slug">>("categories").insert({
-                name: category.title
+            let d = await db<Omit<ICategoryInsert, "slug"> & { created_at: Date, updated_at: Date }>("categories").insert({
+                name: category.title,
+                created_at: new Date(),
+                updated_at: new Date()
             });
 
             if(d.status === false) {
@@ -305,7 +322,19 @@ class CoolFake {
         }
 
         for(let [productName, product] of products) {
-            if(product.colors.length === 0) continue;
+            if(product.colors === undefined || product.colors.length === 0 || product.categories.length === 0) continue;
+            if(product.colors === undefined) continue;
+
+            if(product.colors.some(i => i[Object.keys(i)[0]].sizes.length === 0)) {
+                console.log(`${productName} size rong, bo qua...`);
+                continue;
+            }
+
+            const productTest: string = "Tất cổ dài 84RISING Basketball";
+            if(productName.includes(productTest)) {
+                
+                console.log(product, product.colors.map(i => console.log(i)));
+            }
 
             const productFind = await db<IProductDatabase>("products")
             .where("name", "=", productName).first();
@@ -315,10 +344,12 @@ class CoolFake {
                 continue;
             }
 
-            const productInsert = await db<IProductDatabase>("products").insert({
+            const productInsert = await db<IProductDatabase & { created_at: Date, updated_at: Date }>("products").insert({
                 name: productName,
                 slug: str.slug(productName),
-                description: product.description
+                description: product.description,
+                created_at: new Date(),
+                updated_at: new Date()
             });
             
             for(const category of product.categories) {
@@ -326,7 +357,10 @@ class CoolFake {
                 .where("name", "=", category)
                 .first();
 
-                if(c === null) continue;
+                if(c === null) {
+                    console.log(`${category} khong ton tai trong ${productName}, bo qua...`);
+                    continue;
+                }
 
                 await db<TCategoryProduct>("categories_products")
                 .insert({
@@ -336,39 +370,58 @@ class CoolFake {
             }
 
             for(const color of product.colors) {
-                console.log(color)
-                if(!color) continue;
+                // console.log(color)
+                if(!color) {
+                    console.log(`${productName} khong thay mau, bo qua...`)
+                    continue;
+                }
                 const keys = Object.keys(color);
 
                 for(const colorKey of keys) {
                     const colorDB = await colorFind(colorKey);
-                    if(!colorDB) continue;
+                    if(!colorDB) {
+                        console.log(`Khong tim thay mau ${colorKey} cua ${productName}, bo qua...`)
+                        continue;
+                    }
 
                     const colorData = color[colorKey];
-                    console.log(colorData.sizes)
+
                     for(const size of colorData.sizes) {
                         const findSize = await sizeFind(size);
-                        if(!findSize) continue;
+                        if(!findSize) {
+                            console.log(`Khong tim thay size, ${productName}, bo qua...`)
+                            continue;
+                        }
 
-                        console.log(product.priceAfter)
                         // console.log(findSize.id, colorDB.id, productInsert.data?.insertId);
                         // console.log(productName, findSize.name, colorDB.name)
                         const price = product.priceAfter.replace(".", "").replace("đ", "");
 
-                        const productDetail = await db<IProductDetail>("product_details").insert({
+                        const sku = md5(colorDB.id as string + findSize.id + productInsert.data?.insertId + (Math.floor(Math.random() * 10000) + 1).toString());
+                        if(productName.includes(productTest))
+                            console.log(`THÊM:: ${productName}, ${colorDB.name}, ${findSize.name}`);
+                        
+                        const productDetail = await db<IProductDetail & { created_at: Date, updated_at: Date }>("product_details").insert({
                             product_id: productInsert.data?.insertId.toString() as string, 
                             color_id: colorDB.id as string,
                             size_id: findSize.id as string,
                             price: parseInt(price),
-                            sku: md5(colorDB.id as string + findSize.id + productInsert.data?.insertId),
-                            stock: 50
+                            sku,
+                            stock: 50,
+                            created_at: new Date(),
+                            updated_at: new Date()
                         });
+
+                        if(productDetail.status === false) {
+                            console.log(productDetail)
+                        }
 
                         for(const image of colorData.images) {
                             await db<IProductDetailImage>("product_detail_images")
                             .insert({
                                 product_detail_id: productDetail?.data?.insertId.toString() as string,
                                 image: image.replace("/image/", "https://media2.coolmate.me/cdn-cgi/image/quality=80,format=auto/uploads/")
+                                .replace("/uploads/", "https://media2.coolmate.me/cdn-cgi/image/quality=80,format=auto/uploads/")
                             });
                         }
                     }

@@ -61,7 +61,8 @@ function table(tableName) {
                     const value = data[key];
                     values.push(value);
                 }
-                sql = sql.replace("__ATTRIBUTES__", attributes.join(", ")).replace("__VALUES__", Array(keys.length).fill("?").join(", "));
+                sql = sql.replace("__ATTRIBUTES__", attributes.join(", "))
+                    .replace("__VALUES__", Array(keys.length).fill("?").join(", "));
                 try {
                     // console.log(sql, values.join(", "))
                     const result = yield query(sql, values);

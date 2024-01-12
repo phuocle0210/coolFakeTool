@@ -279,14 +279,18 @@ class CoolFake {
             });    
     
         for(const category of categories) {
-            const result = await db<ICategoryInsert>("categories").where("name", "=", category.title).first();
+            const result = await db<ICategoryInsert>("categories")
+            .where("name", "=", category.title)
+            .first();
+
             if(result !== null) {
                 console.log(category.title, "đã tồn tại!");
                 continue;
             }
 
-            let d = await db<Omit<ICategoryInsert, "slug"> & { created_at: Date, updated_at: Date }>("categories").insert({
+            let d = await db<ICategoryInsert & { created_at: Date, updated_at: Date }>("categories").insert({
                 name: category.title,
+                slug: str.slug(category.title),
                 created_at: new Date(),
                 updated_at: new Date()
             });
@@ -308,10 +312,15 @@ class CoolFake {
                     continue;
                 }
 
-                const insertSub = await db<ICategoryInsert>("sub_categories")
+                const insertSub = await db<ICategoryInsert & {
+                    created_at: Date,
+                    updated_at: Date
+                }>("sub_categories")
                 .insert({ 
                     name: sub.name,
-                    slug: str.slug(sub.name)
+                    slug: str.slug(sub.name),
+                    created_at: new Date(),
+                    updated_at: new Date()
                 });
                 
                 await db("categories_subcategories").insert({
@@ -347,7 +356,7 @@ class CoolFake {
             const productInsert = await db<IProductDatabase & { created_at: Date, updated_at: Date }>("products").insert({
                 name: productName,
                 slug: str.slug(productName),
-                description: product.description,
+                description: product.description.replace(/Coolmate/g, "CoolFake"),
                 created_at: new Date(),
                 updated_at: new Date()
             });

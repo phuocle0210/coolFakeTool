@@ -187,13 +187,16 @@ class CoolFake {
                     updated_at: new Date()
                 });
             for (const category of categories) {
-                const result = yield (0, db_1.default)("categories").where("name", "=", category.title).first();
+                const result = yield (0, db_1.default)("categories")
+                    .where("name", "=", category.title)
+                    .first();
                 if (result !== null) {
                     console.log(category.title, "đã tồn tại!");
                     continue;
                 }
                 let d = yield (0, db_1.default)("categories").insert({
                     name: category.title,
+                    slug: str_1.default.slug(category.title),
                     created_at: new Date(),
                     updated_at: new Date()
                 });
@@ -213,7 +216,9 @@ class CoolFake {
                     const insertSub = yield (0, db_1.default)("sub_categories")
                         .insert({
                         name: sub.name,
-                        slug: str_1.default.slug(sub.name)
+                        slug: str_1.default.slug(sub.name),
+                        created_at: new Date(),
+                        updated_at: new Date()
                     });
                     yield (0, db_1.default)("categories_subcategories").insert({
                         category_id: (_b = d.data) === null || _b === void 0 ? void 0 : _b.insertId,
@@ -243,7 +248,7 @@ class CoolFake {
                 const productInsert = yield (0, db_1.default)("products").insert({
                     name: productName,
                     slug: str_1.default.slug(productName),
-                    description: product.description,
+                    description: product.description.replace(/Coolmate/g, "CoolFake"),
                     created_at: new Date(),
                     updated_at: new Date()
                 });

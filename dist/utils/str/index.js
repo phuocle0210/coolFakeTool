@@ -13,7 +13,11 @@ exports.default = {
         };
         for (let key in listEncode) {
             const regex = new RegExp(listEncode[key], 'g');
-            text = text.toLowerCase().replace(regex, key).replace(/"/, "").replace(/\s|\//, "-");
+            text = text.toLowerCase()
+                .replace(regex, key)
+                .replace(/"|\(|\)/g, "")
+                .replace(/\s|\//, "-")
+                .replace(/&/, 'va');
         }
         return text;
     }

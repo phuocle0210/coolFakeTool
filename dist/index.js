@@ -305,12 +305,22 @@ class CoolFake {
                             if (productDetail.status === false) {
                                 console.log(productDetail);
                             }
-                            for (const image of colorData.images) {
+                            for (let image of colorData.images) {
+                                let check = image.match(/^\/.*?\//);
+                                const getPath = check !== null && Array.isArray(check) ?
+                                    check[0] :
+                                    null;
+                                if (getPath === null || getPath === void 0 ? void 0 : getPath.includes('image')) {
+                                    image = image.replace("/image/", "https://media.coolmate.me/cdn-cgi/image/quality=80,format=auto/uploads/");
+                                }
+                                else if (getPath === null || getPath === void 0 ? void 0 : getPath.includes('uploads')) {
+                                    image = image.replace("/uploads/", "https://media.coolmate.me/cdn-cgi/image/quality=80,format=auto/uploads/");
+                                }
+                                console.log(image);
                                 yield (0, db_1.default)("product_detail_images")
                                     .insert({
                                     product_detail_id: (_g = productDetail === null || productDetail === void 0 ? void 0 : productDetail.data) === null || _g === void 0 ? void 0 : _g.insertId.toString(),
-                                    image: image.replace("/image/", "https://media2.coolmate.me/cdn-cgi/image/quality=80,format=auto/uploads/")
-                                        .replace("/uploads/", "https://media2.coolmate.me/cdn-cgi/image/quality=80,format=auto/uploads/")
+                                    image
                                 });
                             }
                         }
